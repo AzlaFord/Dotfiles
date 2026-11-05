@@ -1,7 +1,7 @@
 ## Install
  
 ```bash
-git clone <your-repo-url> ~/dotfiles
+git clone https://github.com/AzlaFord/Dotfiles.git ~/dotfiles
 cd ~/dotfiles
 chmod +x install.sh
 ./install.sh
