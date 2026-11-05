@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+import os, sys
+
+LIB = "/usr/lib64/libgtk-layer-shell.so.0"
+if "LD_PRELOAD" not in os.environ and os.path.exists(LIB):
+    os.environ["LD_PRELOAD"] = LIB
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+from gi.repository import Gtk, Gdk, GdkPixbuf, GtkLayerShell
+import cairo
+
+# ---- settings ----
+MAX_SIDE = 260        # longest side of the image never exceeds this, px
+MARGIN   = 14         # distance from the screen edges, px
+BAR_H    = 26         # waybar height, so the image sits below it
+BORDER   = "#3a3a3a"
+BORDER_W = 3          # border thickness, px
+# ------------------
+
+img = None
+for ext in ("png", "jpg", "jpeg", "webp"):
+    p = os.path.expanduser(f"~/.config/hypr/corner-image.{ext}")
+    if os.path.exists(p):
+        img = p
+        break
+if not img:
+    sys.exit("No ~/.config/hypr/corner-image.(png|jpg|jpeg|webp) found")
+
+pb = GdkPixbuf.Pixbuf.new_from_file(img)
+w, h = pb.get_width(), pb.get_height()
+
+# keep the real proportions; only shrink if larger than MAX_SIDE
+scale = min(1.0, MAX_SIDE / max(w, h))
+nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+if (nw, nh) != (w, h):
+    pb = pb.scale_simple(nw, nh, GdkPixbuf.InterpType.BILINEAR)
+
+css = f"""
+window {{ background: transparent; }}
+#frame {{ border: {BORDER_W}px solid {BORDER}; padding: 0; }}
+"""
+prov = Gtk.CssProvider()
+prov.load_from_data(css.encode())
+Gtk.StyleContext.add_provider_for_screen(
+    Gdk.Screen.get_default(), prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+)
+
+win = Gtk.Window()
+win.set_app_paintable(True)
+win.set_visual(win.get_screen().get_rgba_visual())
+
+GtkLayerShell.init_for_window(win)
+GtkLayerShell.set_layer(win, GtkLayerShell.Layer.BOTTOM)
+GtkLayerShell.set_anchor(win, GtkLayerShell.Edge.TOP, True)
+GtkLayerShell.set_anchor(win, GtkLayerShell.Edge.RIGHT, True)
+GtkLayerShell.set_margin(win, GtkLayerShell.Edge.TOP, BAR_H + MARGIN)
+GtkLayerShell.set_margin(win, GtkLayerShell.Edge.RIGHT, MARGIN)
+GtkLayerShell.set_exclusive_zone(win, -1)
+GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.NONE)
+
+frame = Gtk.Box()
+frame.set_name("frame")
+frame.add(Gtk.Image.new_from_pixbuf(pb))
+win.add(frame)
+
+def passthrough(widget):
+    try:
+        widget.get_window().input_shape_combine_region(cairo.Region(), 0, 0)
+    except Exception:
+        pass
+win.connect("realize", passthrough)
+
+win.connect("destroy", Gtk.main_quit)
+win.show_all()
+Gtk.main()

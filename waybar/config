@@ -16,7 +16,7 @@
     "network",
     "pulseaudio",
     "cpu",
-    "battery"
+    "custom/battery"
   ],
 
   "hyprland/workspaces": {
@@ -49,7 +49,17 @@
     "format": "{:%A %H:%M}",
     "tooltip": false
   },
+  "clock#horizontal": {
+    "format": "{:%A %H:%M}",
+    "tooltip": false,
+    "on-click": "~/.local/bin/calendar-popup"
+  },
 
+  "clock#vertical": {
+    "format": "{:%H\n—\n%M}",
+    "tooltip": false,
+    "on-click": "~/.local/bin/calendar-popup"
+  },
   "clock#vertical": {
     "format": "{:%H\n—\n%M}",
     "tooltip": false
@@ -59,21 +69,12 @@
     "interval": 5,
     "format": "CPU {usage}%"
   },
-
-  "battery": {
-    "format": "{capacity}% {icon}",
-    "format-icons": ["󰁺","󰁼","󰁾","󰂀","󰁹"],
-    "states": {
-      "warning": 20,
-      "critical": 10
-    }
-  },
-  "custom/power-mode": {
-    "format": ">>",
-    "on-click": "perf-mode perf",
-    "on-click-right": "perf-mode bal",
-    "on-click-middle": "perf-mode save",
-    "tooltip": true
+  "custom/battery": {
+    "exec": "~/.local/bin/battery-mode",
+    "return-type": "json",
+    "interval": 10,
+    "signal": 8,
+    "on-click": "~/.local/bin/battery-mode cycle"
   },
   "network": {
     "format-wifi": "WiFi",
@@ -84,9 +85,9 @@
   "pulseaudio": {
     "format": "VOL {volume}%",
     "format-muted": "MUTED",
-    "scroll-step": 5
+    "scroll-step": 5,
+    "on-click": "pactl set-sink-mute @DEFAULT_SINK@ toggle"
   },
-
   "bluetooth": {
     "format": "BT",
     "on-click": "blueman-manager"

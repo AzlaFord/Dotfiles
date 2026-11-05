@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import os, sys, glob, calendar, datetime
+
+# gtk-layer-shell must be loaded before libwayland, so re-exec once with LD_PRELOAD
+LIB = "/usr/lib64/libgtk-layer-shell.so.0"
+if "LD_PRELOAD" not in os.environ and os.path.exists(LIB):
+    os.environ["LD_PRELOAD"] = LIB
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+from gi.repository import Gtk, Gdk, GtkLayerShell
+
+BG, FG, RED, BORDER = "#1e1e1e", "#d4d4d4", "#a55555", "#3a3a3a"
+FONT = "'Cascadia Mono NF', JetBrainsMono, monospace"
+
+# Optional background image: put calendar-bg.png/jpg/jpeg/webp in ~/.config/waybar/
+img = None
+for ext in ("png", "jpg", "jpeg", "webp"):
+    p = os.path.expanduser(f"~/.config/waybar/calendar-bg.{ext}")
+    if os.path.exists(p):
+        img = p
+        break
+
+card_bg = (
+    f'background-image: linear-gradient(rgba(30,30,30,0.6), rgba(30,30,30,0.6)), url("{img}");'
+    "background-size: cover; background-position: center;"
+    if img else f"background-color: {BG};"
+)
+
+CSS = f"""
+window {{ background: transparent; }}
+#card {{ {card_bg} border: 1px solid {BORDER}; padding: 14px 16px; }}
+label {{ background: transparent; color: {FG}; font-family: {FONT}; font-size: 14px; padding: 3px 0; }}
+.title {{ padding-bottom: 8px; }}
+.dow {{ opacity: 0.5; }}
+.we {{ color: {RED}; }}
+.today {{ background-color: {FG}; color: {BG}; }}
+.today.we {{ background-color: {RED}; color: {BG}; }}
+"""
+
+provider = Gtk.CssProvider()
+provider.load_from_data(CSS.encode())
+Gtk.StyleContext.add_provider_for_screen(
+    Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+)
+
+win = Gtk.Window()
+win.set_app_paintable(True)
+win.set_visual(win.get_screen().get_rgba_visual())
+
+GtkLayerShell.init_for_window(win)
+GtkLayerShell.set_layer(win, GtkLayerShell.Layer.OVERLAY)
+for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+             GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+    GtkLayerShell.set_anchor(win, edge, True)
+GtkLayerShell.set_exclusive_zone(win, -1)
+GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.ON_DEMAND)
+
+# Fullscreen transparent layer: any click on it closes the popup
+backdrop = Gtk.EventBox()
+backdrop.set_visible_window(False)
+backdrop.connect("button-press-event", lambda *_: Gtk.main_quit())
+win.add(backdrop)
+
+holder = Gtk.Box()
+backdrop.add(holder)
+
+# Card: swallows clicks so clicking inside doesn't close it
+card_eb = Gtk.EventBox()
+card_eb.set_visible_window(False)
+card_eb.connect("button-press-event", lambda *_: True)
+card_eb.set_halign(Gtk.Align.CENTER)
+card_eb.set_valign(Gtk.Align.START)
+card_eb.set_margin_top(34)
+card_eb.set_hexpand(True)
+holder.pack_start(card_eb, True, True, 0)
+
+card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+card.set_name("card")
+card_eb.add(card)
+
+today = datetime.date.today()
+
+title = Gtk.Label(label=today.strftime("%B %Y").lower())
+title.get_style_context().add_class("title")
+card.pack_start(title, False, False, 0)
+
+grid = Gtk.Grid()
+grid.set_column_homogeneous(True)
+card.pack_start(grid, False, False, 0)
+
+def cell(text, col, row, classes=()):
+    l = Gtk.Label(label=text)
+    l.set_width_chars(4)
+    for c in classes:
+        l.get_style_context().add_class(c)
+    grid.attach(l, col, row, 1, 1)
+
+for i, d in enumerate(("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")):
+    cell(d, i, 0, ["dow"] + (["we"] if i >= 5 else []))
+
+for r, week in enumerate(calendar.Calendar(0).monthdayscalendar(today.year, today.month), start=1):
+    for c, day in enumerate(week):
+        if day == 0:
+            continue
+        cls = []
+        if c >= 5:
+            cls.append("we")
+        if day == today.day:
+            cls.append("today")
+        cell(str(day), c, r, cls)
+
+win.connect("key-press-event", lambda w, e: Gtk.main_quit() if e.keyval == Gdk.KEY_Escape else None)
+win.connect("destroy", Gtk.main_quit)
+win.show_all()
+Gtk.main()

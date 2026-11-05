@@ -1,0 +1,53 @@
+
+#!/usr/bin/env bash
+
+get_profile() {
+  tuned-adm active | awk -F ': ' '{print $2}'
+}
+
+if [ "$1" = "cycle" ]; then
+  case "$(get_profile)" in
+    powersave) tuned-adm profile balanced ;;
+    balanced) tuned-adm profile throughput-performance ;;
+    throughput-performance) tuned-adm profile powersave ;;
+    *) tuned-adm profile powersave ;;
+  esac
+
+  pkill -RTMIN+8 waybar
+  exit
+fi
+
+bat=$(find /sys/class/power_supply -maxdepth 1 -name 'BAT*' -print -quit)
+
+if [ -n "$bat" ]; then
+  cap=$(<"$bat/capacity")
+  status=$(<"$bat/status")
+else
+  cap="N/A"
+  status="No battery"
+fi
+
+# Select battery icon
+if [ "$cap" = "N/A" ]; then
+  icon="󰂑"
+elif [ "$cap" -le 10 ]; then
+  icon="󰁺"
+elif [ "$cap" -le 30 ]; then
+  icon="󰁼"
+elif [ "$cap" -le 50 ]; then
+  icon="󰁾"
+elif [ "$cap" -le 80 ]; then
+  icon="󰂀"
+else
+  icon="󰁹"
+fi
+
+case "$(get_profile)" in
+  powersave) mode="Battery saving" ;;
+  balanced) mode="Medium power" ;;
+  throughput-performance) mode="Performance" ;;
+  *) mode="Unknown" ;;
+esac
+
+printf '{"text":"%s%% %s","tooltip":"%s\\n%s%% · %s"}\n' \
+  "$cap" "$icon" "$mode" "$cap" "$status"
